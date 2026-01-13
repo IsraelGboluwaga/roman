@@ -24,11 +24,6 @@ An AI-powered resume generator that creates tailored resumes based on uploaded r
 - **Redis Caching**: Fast resume data retrieval
 - **Comprehensive Logging**: Winston-based structured logging
 
-### Chrome Extension
-- **Browser Integration**: Seamless integration with job posting websites
-- **Real-time Processing**: Extract job requirements and generate tailored resumes
-- **Popup Interface**: Clean, intuitive user interface
-
 ## 🛠 Tech Stack
 
 - **Backend**: Node.js, Express.js, TypeScript
@@ -195,7 +190,6 @@ src/
 │   │   ├── controllers/        # Route controllers
 │   │   ├── middleware/         # Custom middleware
 │   │   └── routes/            # API routes
-│   ├── chrome-extension/       # Chrome extension files
 │   ├── config/                # Configuration files
 │   ├── models/                # MongoDB models
 │   ├── services/              # Business logic services
