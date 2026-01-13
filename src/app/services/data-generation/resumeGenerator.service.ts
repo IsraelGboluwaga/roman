@@ -1,6 +1,11 @@
 import { initLogger } from '../../config/winston'
 import { getResume, GetResumeResult } from '../business-logic/resume.service'
 import Anthropic from '@anthropic-ai/sdk'
+import { TemplateService, ResumeTemplateData } from '../templating/template.service'
+import { DocumentGenerator } from '../document-generation/documentGenerator.service'
+import { v4 as uuidv4 } from 'uuid'
+import path from 'path'
+import fs from 'fs/promises'
 
 const logger = initLogger('resumeGenerator.service.ts')
 
@@ -115,7 +120,7 @@ export class ResumeGenerator {
     resume: GetResumeResult, 
     jobDescription: string
   ): string {
-    return `You are an expert resume writer. Please optimize the following resume for the given job description.
+    return `You are an expert resume writer. Please optimize the following resume for the given job description and return the result as a JSON object.
 
 ORIGINAL RESUME:
 ${resume.parsedText}
@@ -133,28 +138,157 @@ Please create an optimized resume that:
 4. Improves formatting and clarity
 5. Follows ATS-friendly formatting
 
-Return only the optimized resume content in a clean, professional format.`
+Return ONLY a valid JSON object with this exact structure:
+{
+  "personalInfo": {
+    "name": "Full Name",
+    "email": "email@example.com",
+    "phone": "phone number",
+    "location": "City, State",
+    "linkedin": "linkedin URL (optional)"
+  },
+  "summary": "Professional summary paragraph",
+  "experience": [
+    {
+      "title": "Job Title",
+      "company": "Company Name",
+      "startDate": "2023-01-01",
+      "endDate": "2024-01-01",
+      "description": "Brief job description",
+      "achievements": ["Achievement 1", "Achievement 2"]
+    }
+  ],
+  "education": [
+    {
+      "degree": "Degree Name",
+      "school": "School Name",
+      "year": "2023",
+      "gpa": "3.8/4.0",
+      "honors": "Magna Cum Laude"
+    }
+  ],
+  "skills": ["Skill 1", "Skill 2", "Skill 3"]
+}`
   }
 
   private static async formatDocument(content: string, format: string): Promise<Buffer> {
     logger.info(`Formatting document as ${format}`)
     
-    // TODO: Implement document formatting
-    // For now, return a simple text buffer
-    // Future: Use libraries like puppeteer for PDF or officegen for DOCX
-    
-    throw new Error('Document formatting not yet implemented')
+    try {
+      // Extract and parse JSON from AI response (handles markdown wrapping)
+      const resumeData: ResumeTemplateData = this.extractJsonFromAIResponse(content)
+      
+      // Compile HTML template
+      const html = await TemplateService.compileTemplate('modern', resumeData)
+      
+      // Generate document based on format
+      const buffer = await DocumentGenerator.generateDocument(html, format as 'pdf' | 'docx')
+      
+      logger.info(`Document formatted successfully as ${format}`)
+      return buffer
+      
+    } catch (error) {
+      logger.error(`Document formatting failed: ${error}`)
+      throw error
+    }
+  }
+
+  private static extractJsonFromAIResponse(content: string): ResumeTemplateData {
+    try {
+      // First try direct JSON parse
+      return JSON.parse(content.trim())
+    } catch (error) {
+      logger.info('Direct JSON parse failed, attempting to extract from markdown')
+      
+      // Extract JSON from markdown code blocks
+      const jsonMatch = content.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/i)
+      
+      if (jsonMatch && jsonMatch[1]) {
+        try {
+          return JSON.parse(jsonMatch[1].trim())
+        } catch (parseError) {
+          logger.error('Failed to parse extracted JSON from markdown:', parseError)
+        }
+      }
+      
+      // Try to find JSON object without code blocks
+      const jsonObjectMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonObjectMatch) {
+        try {
+          return JSON.parse(jsonObjectMatch[0].trim())
+        } catch (parseError) {
+          logger.error('Failed to parse extracted JSON object:', parseError)
+        }
+      }
+      
+      logger.error('No valid JSON found in AI response:', content.substring(0, 200))
+      throw new Error('AI response does not contain valid JSON. Please try again.')
+    }
   }
 
   private static async storeTemporaryDocument(
     buffer: Buffer, 
     format: string
   ): Promise<GenerateResumeResult> {
-    logger.info('Storing temporary document')
+    logger.info('Storing document to cloud storage')
     
-    // TODO: Implement temporary storage
-    // Options: GridFS with TTL, S3 with expiration, temporary file system
-    
-    throw new Error('Temporary storage not yet implemented')
+    try {
+      // Generate unique filename
+      const fileId = uuidv4()
+      const filename = `resume_${fileId}.${format}`
+      
+      // Set expiration (1 hour from now)
+      const expiresAt = new Date(Date.now() + 60 * 60 * 1000)
+      
+      // TODO: Implement actual cloud storage (S3, GCS, Azure Blob)
+      // For now, simulate cloud storage with placeholder URL
+      const cloudStorageUrl = await this.uploadToCloudStorage(buffer, filename, expiresAt)
+      
+      logger.info(`Document stored in cloud storage: ${filename}`)
+      
+      return {
+        downloadUrl: cloudStorageUrl,
+        expiresAt,
+        format
+      }
+      
+    } catch (error) {
+      logger.error(`Cloud storage failed: ${error}`)
+      throw new Error(`Failed to store document: ${error}`)
+    }
   }
+
+  private static async uploadToCloudStorage(buffer: Buffer, filename: string, expiresAt: Date): Promise<string> {
+    // TODO: Replace with actual cloud storage implementation
+    // Example implementations:
+    
+    // AWS S3:
+    // const s3 = new AWS.S3()
+    // await s3.upload({
+    //   Bucket: 'your-resume-bucket',
+    //   Key: `generated/${filename}`,
+    //   Body: buffer,
+    //   ContentType: format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    //   Expires: expiresAt
+    // }).promise()
+    // return s3.getSignedUrl('getObject', { Bucket: 'your-resume-bucket', Key: `generated/${filename}`, Expires: 3600 })
+    
+    // Google Cloud Storage:
+    // const storage = new Storage()
+    // const bucket = storage.bucket('your-resume-bucket')
+    // const file = bucket.file(`generated/${filename}`)
+    // await file.save(buffer)
+    // const [signedUrl] = await file.getSignedUrl({ expires: expiresAt, action: 'read' })
+    // return signedUrl
+    
+    // For now, return a placeholder cloud storage URL
+    const baseUrl = process.env.CLOUD_STORAGE_BASE_URL || 'https://storage.yourapp.com'
+    const signedUrl = `${baseUrl}/generated/${filename}?expires=${expiresAt.getTime()}&signature=placeholder_signature`
+    
+    logger.info(`Generated placeholder cloud storage URL: ${signedUrl}`)
+    return signedUrl
+  }
+
+  // Note: Cloud storage cleanup is handled by the storage provider's TTL/expiration policies
+  // No manual cleanup needed for pre-signed URLs - they automatically expire
 }

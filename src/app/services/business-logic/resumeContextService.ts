@@ -8,7 +8,7 @@ const logger = initLogger('resumeContextService.ts')
 export interface ResumeContextData {
   parsedText: string
   structuredData: any
-  fileType: 'pdf' | 'image'
+  fileType: 'pdf' | 'docx' | 'doc' | 'image'
   blobId: string
 }
 

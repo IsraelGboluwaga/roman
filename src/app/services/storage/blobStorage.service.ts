@@ -19,7 +19,7 @@ export interface StoredBlob {
 export interface CachedResumeData {
   parsedText: string
   structuredData: any
-  fileType: 'pdf' | 'image'
+  fileType: 'pdf' | 'docx' | 'doc' | 'image'
   extractedAt: Date
   blobId: string
 }

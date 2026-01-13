@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{personalInfo.name}} - Resume</title>
+    <style>
+        {{{styles}}}
+    </style>
+</head>
+<body>
+    <div class="resume-container">
+        <!-- Header Section -->
+        {{> header personalInfo}}
+        
+        <!-- Summary Section -->
+        {{#if summary}}
+        <section class="summary">
+            <h2>Professional Summary</h2>
+            <p>{{summary}}</p>
+        </section>
+        {{/if}}
+        
+        <!-- Experience Section -->
+        {{#if experience}}
+        <section class="experience">
+            <h2>Professional Experience</h2>
+            {{#each experience}}
+                {{> experience-item this}}
+            {{/each}}
+        </section>
+        {{/if}}
+        
+        <!-- Education Section -->
+        {{#if education}}
+        <section class="education">
+            <h2>Education</h2>
+            {{#each education}}
+                {{> education-item this}}
+            {{/each}}
+        </section>
+        {{/if}}
+        
+        <!-- Skills Section -->
+        {{#if skills}}
+        <section class="skills">
+            <h2>Technical Skills</h2>
+            {{> skills-list skills}}
+        </section>
+        {{/if}}
+    </div>
+</body>
+</html>

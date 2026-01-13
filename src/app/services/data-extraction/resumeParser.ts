@@ -1,6 +1,7 @@
 import axios from 'axios'
 import Anthropic from '@anthropic-ai/sdk'
 import pdfParse from 'pdf-parse'
+import * as mammoth from 'mammoth'
 import { initLogger } from '../../config/winston'
 import { blobStorageService, CachedResumeData } from '../storage/blobStorage.service'
 
@@ -16,7 +17,7 @@ export interface ParseResult {
     experience?: string[]
     education?: string[]
   }
-  fileType: 'pdf' | 'image'
+  fileType: 'pdf' | 'docx' | 'doc' | 'image'
   blobId?: string
 }
 
@@ -72,14 +73,31 @@ export class ResumeParser {
     }
   }
 
-  private static async parseWithClaude(content: string | Buffer, fileType: 'pdf' | 'image'): Promise<{ text: string; structuredData: any }> {
+  private static async parseDocxText(buffer: Buffer): Promise<string> {
+    try {
+      logger.info('Extracting text from DOCX/DOC...')
+      const result = await mammoth.extractRawText({ buffer })
+      logger.info(`DOCX/DOC text extracted successfully, ${result.value.length} characters`)
+      
+      if (result.messages.length > 0) {
+        logger.warn('Mammoth conversion warnings:', result.messages)
+      }
+      
+      return result.value
+    } catch (error) {
+      logger.error(`Failed to extract DOCX/DOC text: ${error}`)
+      throw new Error(`Failed to extract DOCX/DOC text: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  private static async parseWithClaude(content: string | Buffer, fileType: 'pdf' | 'docx' | 'doc' | 'image'): Promise<{ text: string; structuredData: any }> {
     try {
       logger.info(`Parsing ${fileType} with Claude...`)
       
       let messages: any[]
       
-      if (fileType === 'pdf') {
-        // For PDFs, we send the extracted text
+      if (fileType === 'pdf' || fileType === 'docx' || fileType === 'doc') {
+        // For PDFs and DOCX/DOC files, we send the extracted text
         messages = [{
           role: 'user',
           content: `Please extract and structure the following resume content. Return a JSON object with the following format:
@@ -157,10 +175,38 @@ ${content}`
     }
   }
 
-  private static detectFileType(buffer: Buffer): 'pdf' | 'image' {
+  private static detectFileType(buffer: Buffer): 'pdf' | 'docx' | 'doc' | 'image' {
+    // Check for PDF signature
     if (buffer.length >= 4 && buffer.toString('ascii', 0, 4) === '%PDF') {
       return 'pdf'
     }
+    
+    // Check for DOCX signature (ZIP file containing Office documents)
+    if (buffer.length >= 4 && 
+        buffer[0] === 0x50 && buffer[1] === 0x4B && 
+        (buffer[2] === 0x03 || buffer[2] === 0x05 || buffer[2] === 0x07) && 
+        (buffer[3] === 0x04 || buffer[3] === 0x06 || buffer[3] === 0x08)) {
+      
+      // Check if it contains Office-specific files by looking for content types
+      const bufferString = buffer.toString('utf8')
+      if (bufferString.includes('word/') || bufferString.includes('xl/') || bufferString.includes('ppt/')) {
+        // Further check for Word document specifically
+        if (bufferString.includes('word/document.xml') || bufferString.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+          return 'docx'
+        }
+      }
+    }
+    
+    // Check for legacy DOC signature (OLE2 compound document)
+    if (buffer.length >= 8 &&
+        buffer[0] === 0xD0 && buffer[1] === 0xCF && 
+        buffer[2] === 0x11 && buffer[3] === 0xE0 && 
+        buffer[4] === 0xA1 && buffer[5] === 0xB1 && 
+        buffer[6] === 0x1A && buffer[7] === 0xE1) {
+      return 'doc'
+    }
+    
+    // Default to image for everything else
     return 'image'
   }
 
@@ -187,8 +233,26 @@ ${content}`
       logger.info(`Detected file type: ${fileType}`)
       
       // Store blob in GridFS
-      const filename = `resume_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${fileType === 'pdf' ? 'pdf' : 'png'}`
-      const contentType = fileType === 'pdf' ? 'application/pdf' : 'image/png'
+      const getFileExtension = (type: string) => {
+        switch (type) {
+          case 'pdf': return 'pdf'
+          case 'docx': return 'docx' 
+          case 'doc': return 'doc'
+          default: return 'png'
+        }
+      }
+      
+      const getContentType = (type: string) => {
+        switch (type) {
+          case 'pdf': return 'application/pdf'
+          case 'docx': return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          case 'doc': return 'application/msword'
+          default: return 'image/png'
+        }
+      }
+      
+      const filename = `resume_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.${getFileExtension(fileType)}`
+      const contentType = getContentType(fileType)
       const storedBlob = await blobStorageService.storeBlob(
         buffer,
         filename,
@@ -200,8 +264,10 @@ ${content}`
       
       if (fileType === 'pdf') {
         content = await this.parsePDFText(buffer)
+      } else if (fileType === 'docx' || fileType === 'doc') {
+        content = await this.parseDocxText(buffer)
       } else {
-        content = buffer
+        content = buffer // Images
       }
       
       const { text, structuredData } = await this.parseWithClaude(content, fileType)
@@ -260,8 +326,10 @@ ${content}`
       
       if (fileType === 'pdf') {
         content = await this.parsePDFText(buffer)
+      } else if (fileType === 'docx' || fileType === 'doc') {
+        content = await this.parseDocxText(buffer)
       } else {
-        content = buffer
+        content = buffer // Images
       }
       
       const { text, structuredData } = await this.parseWithClaude(content, fileType)

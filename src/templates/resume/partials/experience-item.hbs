@@ -1,0 +1,21 @@
+<div class="experience-item">
+    <div class="experience-header">
+        <h3 class="job-title">{{title}}</h3>
+        <div class="company-info">
+            <span class="company">{{company}}</span>
+            <span class="duration">{{formatDateRange startDate endDate}}</span>
+        </div>
+    </div>
+    
+    {{#if description}}
+    <p class="job-description">{{description}}</p>
+    {{/if}}
+    
+    {{#if achievements}}
+    <ul class="achievements">
+        {{#each achievements}}
+        <li>{{this}}</li>
+        {{/each}}
+    </ul>
+    {{/if}}
+</div>

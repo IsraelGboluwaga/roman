@@ -11,6 +11,9 @@ jest.mock('@anthropic-ai/sdk', () => {
   }
 })
 jest.mock('pdf-parse', () => jest.fn())
+jest.mock('mammoth', () => ({
+  extractRawText: jest.fn()
+}))
 jest.mock('../../../config/winston', () => ({
   initLogger: jest.fn().mockReturnValue({
     info: jest.fn(),
@@ -34,11 +37,13 @@ import { ResumeParser, ParseResult } from '../resumeParser'
 import axios from 'axios'
 import Anthropic from '@anthropic-ai/sdk'
 import pdfParse from 'pdf-parse'
+import * as mammoth from 'mammoth'
 import { initLogger } from '../../../config/winston'
 import { blobStorageService } from '../../storage/blobStorage.service'
 
 const mockAxios = axios as jest.Mocked<typeof axios>
 const mockPdfParse = pdfParse as jest.MockedFunction<typeof pdfParse>
+const mockMammoth = mammoth as jest.Mocked<typeof mammoth>
 const mockInitLogger = initLogger as jest.MockedFunction<typeof initLogger>
 
 // Get the mocked logger instance
@@ -83,6 +88,10 @@ describe('ResumeParser', () => {
     const mockFileUrl = 'https://example.com/resume.pdf'
     const mockPdfBuffer = Buffer.from('%PDF-1.4 mock pdf content')
     const mockImageBuffer = Buffer.from('mock image content')
+    // DOCX signature: ZIP file with specific structure
+    const mockDocxBuffer = Buffer.from([0x50, 0x4B, 0x03, 0x04, ...Array(100).fill(0), ...Buffer.from('word/document.xml')])
+    // DOC signature: OLE2 compound document
+    const mockDocBuffer = Buffer.from([0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, ...Array(100).fill(0)])
     
     beforeEach(() => {
       mockAxios.get.mockResolvedValue({
@@ -271,6 +280,152 @@ describe('ResumeParser', () => {
 
       const result = await ResumeParser.parseFromUrl(mockFileUrl)
       expect(result.fileType).toBe('image')
+    })
+
+    it('should successfully parse a DOCX resume from URL', async () => {
+      const mockExtractedText = 'John Doe\nSoftware Engineer\njohn@example.com\n555-1234\nPython, JavaScript, React'
+      const mockClaudeResponse = {
+        text: 'John Doe Software Engineer john@example.com 555-1234 Python, JavaScript, React',
+        structuredData: {
+          name: 'John Doe',
+          email: 'john@example.com',
+          phone: '555-1234',
+          skills: ['Python', 'JavaScript', 'React'],
+          experience: ['Software Engineer at Tech Corp'],
+          education: ['BS Computer Science']
+        }
+      }
+
+      mockAxios.get.mockResolvedValue({ data: mockDocxBuffer })
+      mockMammoth.extractRawText.mockResolvedValue({ 
+        value: mockExtractedText,
+        messages: []
+      })
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify(mockClaudeResponse)
+        }]
+      } as any)
+
+      const result = await ResumeParser.parseFromUrl(mockFileUrl)
+
+      expect(mockMammoth.extractRawText).toHaveBeenCalledWith({ buffer: mockDocxBuffer })
+      expect(result).toEqual({
+        text: mockClaudeResponse.text,
+        structuredData: mockClaudeResponse.structuredData,
+        fileType: 'docx',
+        blobId: 'mock-blob-id'
+      })
+      
+      expect(mockBlobStorageService.storeBlob).toHaveBeenCalledWith(
+        mockDocxBuffer,
+        expect.stringContaining('resume_'),
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        { userId: undefined, resumeId: undefined, originalUrl: mockFileUrl }
+      )
+    })
+
+    it('should successfully parse a DOC resume from URL', async () => {
+      const mockExtractedText = 'Jane Smith\nMarketing Manager\njane@example.com\n555-5678'
+      const mockClaudeResponse = {
+        text: 'Jane Smith Marketing Manager jane@example.com 555-5678',
+        structuredData: {
+          name: 'Jane Smith',
+          email: 'jane@example.com',
+          phone: '555-5678',
+          skills: ['Marketing', 'Analytics'],
+          experience: ['Marketing Manager at Corp Inc'],
+          education: ['MBA Marketing']
+        }
+      }
+
+      mockAxios.get.mockResolvedValue({ data: mockDocBuffer })
+      mockMammoth.extractRawText.mockResolvedValue({ 
+        value: mockExtractedText,
+        messages: []
+      })
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify(mockClaudeResponse)
+        }]
+      } as any)
+
+      const result = await ResumeParser.parseFromUrl(mockFileUrl)
+
+      expect(mockMammoth.extractRawText).toHaveBeenCalledWith({ buffer: mockDocBuffer })
+      expect(result).toEqual({
+        text: mockClaudeResponse.text,
+        structuredData: mockClaudeResponse.structuredData,
+        fileType: 'doc',
+        blobId: 'mock-blob-id'
+      })
+      
+      expect(mockBlobStorageService.storeBlob).toHaveBeenCalledWith(
+        mockDocBuffer,
+        expect.stringContaining('resume_'),
+        'application/msword',
+        { userId: undefined, resumeId: undefined, originalUrl: mockFileUrl }
+      )
+    })
+
+    it('should handle DOCX parsing errors', async () => {
+      const mockError = new Error('DOCX parsing error')
+      mockAxios.get.mockResolvedValue({ data: mockDocxBuffer })
+      mockMammoth.extractRawText.mockRejectedValue(mockError)
+
+      await expect(ResumeParser.parseFromUrl(mockFileUrl)).rejects.toThrow('Failed to extract DOCX/DOC text: DOCX parsing error')
+      expect(mockLogger.error).toHaveBeenCalledWith(expect.stringContaining('Failed to extract DOCX/DOC text'))
+    })
+
+    it('should log mammoth warnings when parsing DOCX', async () => {
+      const mockExtractedText = 'Test content'
+      const mockWarnings: any[] = [{ type: 'warning', message: 'Unsupported element' }]
+      
+      mockAxios.get.mockResolvedValue({ data: mockDocxBuffer })
+      mockMammoth.extractRawText.mockResolvedValue({ 
+        value: mockExtractedText,
+        messages: mockWarnings
+      } as any)
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ text: 'test', structuredData: {} })
+        }]
+      } as any)
+
+      await ResumeParser.parseFromUrl(mockFileUrl)
+
+      expect(mockLogger.warn).toHaveBeenCalledWith('Mammoth conversion warnings:', mockWarnings)
+    })
+
+    it('should correctly detect DOCX file type', async () => {
+      mockAxios.get.mockResolvedValue({ data: mockDocxBuffer })
+      mockMammoth.extractRawText.mockResolvedValue({ value: 'test', messages: [] })
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ text: 'test', structuredData: {} })
+        }]
+      } as any)
+
+      const result = await ResumeParser.parseFromUrl(mockFileUrl)
+      expect(result.fileType).toBe('docx')
+    })
+
+    it('should correctly detect DOC file type', async () => {
+      mockAxios.get.mockResolvedValue({ data: mockDocBuffer })
+      mockMammoth.extractRawText.mockResolvedValue({ value: 'test', messages: [] })
+      mockAnthropicCreate.mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({ text: 'test', structuredData: {} })
+        }]
+      } as any)
+
+      const result = await ResumeParser.parseFromUrl(mockFileUrl)
+      expect(result.fileType).toBe('doc')
     })
 
     it('should clean up whitespace in the returned text', async () => {

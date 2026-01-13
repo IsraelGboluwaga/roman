@@ -166,6 +166,7 @@ describe('ResumeContextService', () => {
     const resumeId = 'resume456'
     const mockResumeData = {
       id: resumeId,
+      userId: userId,
       active: true,
       fileUrl: 'https://example.com/resume.pdf',
       title: 'My Resume',

@@ -1,0 +1,234 @@
+/* Print-optimized resume styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Calibri', 'Arial', sans-serif;
+    font-size: 11pt;
+    line-height: 1.4;
+    color: #333;
+    background: white;
+}
+
+.resume-container {
+    max-width: 210mm; /* A4 width */
+    margin: 0 auto;
+    padding: 15mm;
+    background: white;
+}
+
+/* Header */
+.resume-header {
+    text-align: center;
+    border-bottom: 2px solid #2c3e50;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.name {
+    font-size: 24pt;
+    font-weight: bold;
+    color: #2c3e50;
+    margin-bottom: 5px;
+}
+
+.contact-info {
+    font-size: 10pt;
+    color: #666;
+}
+
+.contact-info span {
+    margin: 0 8px;
+}
+
+.contact-info span:first-child {
+    margin-left: 0;
+}
+
+.contact-info span:last-child {
+    margin-right: 0;
+}
+
+/* Sections */
+section {
+    margin-bottom: 20px;
+}
+
+section h2 {
+    font-size: 14pt;
+    color: #2c3e50;
+    border-bottom: 1px solid #bdc3c7;
+    padding-bottom: 3px;
+    margin-bottom: 12px;
+    font-weight: bold;
+}
+
+/* Summary */
+.summary p {
+    font-size: 11pt;
+    line-height: 1.5;
+    text-align: justify;
+}
+
+/* Experience */
+.experience-item {
+    margin-bottom: 15px;
+    break-inside: avoid;
+}
+
+.experience-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+}
+
+.job-title {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.company-info {
+    text-align: right;
+    font-size: 10pt;
+    color: #666;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.company {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.duration {
+    font-style: italic;
+}
+
+.job-description {
+    font-size: 10pt;
+    margin-bottom: 5px;
+    line-height: 1.4;
+}
+
+.achievements {
+    margin-left: 20px;
+    margin-top: 5px;
+    padding-left: 0;
+}
+
+.achievements li {
+    margin-bottom: 3px;
+    font-size: 10pt;
+    line-height: 1.3;
+}
+
+/* Education */
+.education-item {
+    margin-bottom: 12px;
+    break-inside: avoid;
+}
+
+.education-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 5px;
+    flex-wrap: wrap;
+}
+
+.degree {
+    font-size: 12pt;
+    font-weight: bold;
+    color: #2c3e50;
+    margin: 0;
+}
+
+.school-info {
+    text-align: right;
+    font-size: 10pt;
+    color: #666;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.school {
+    font-weight: 600;
+    margin-bottom: 2px;
+}
+
+.year {
+    font-style: italic;
+}
+
+.gpa, .honors {
+    font-size: 10pt;
+    color: #666;
+    margin: 2px 0;
+}
+
+.honors {
+    font-style: italic;
+}
+
+/* Skills */
+.skills-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.skill-tag {
+    background: #ecf0f1;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 10pt;
+    border: 1px solid #bdc3c7;
+    color: #2c3e50;
+    font-weight: 500;
+}
+
+/* Print optimizations */
+@media print {
+    .resume-container {
+        margin: 0;
+        padding: 10mm;
+        box-shadow: none;
+    }
+    
+    /* Ensure sections don't break across pages */
+    .experience-item,
+    .education-item {
+        break-inside: avoid;
+    }
+    
+    /* Avoid orphans and widows */
+    p, li {
+        orphans: 2;
+        widows: 2;
+    }
+}
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+    .experience-header,
+    .education-header {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .company-info,
+    .school-info {
+        text-align: left;
+        align-items: flex-start;
+        margin-top: 3px;
+    }
+}
