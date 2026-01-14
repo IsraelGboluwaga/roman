@@ -6,9 +6,9 @@ dotenv.config()
 export const JWT_SECRET = process.env.JWT_SECRET || 'capri-s0on3-default-jwt-secret-change-in-production'
 
 // MongoDB Configuration
-export const DB_NAME = process.env.DB_NAME || 'roman-interview-assistant'
-export const DB_USERNAME = process.env.DB_USERNAME || 'israel'
-export const DB_PASSWORD = process.env.DB_PASSWORD || 'fake-default-password'
+export const DB_NAME = process.env.DB_NAME || 'roman-ai'
+export const DB_USERNAME = process.env.DB_USERNAME || 'roman'
+export const DB_PASSWORD = process.env.DB_PASSWORD || 'roman'
 export const MONGO_HOST = process.env.MONGO_HOST || 'localhost'
 export const MONGO_PORT = process.env.MONGO_PORT || 27017
 export const MONGO_MAX_POOL_SIZE = parseInt(process.env.MONGO_MAX_POOL_SIZE || '10', 10)

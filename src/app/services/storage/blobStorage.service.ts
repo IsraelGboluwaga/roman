@@ -25,10 +25,13 @@ export interface CachedResumeData {
 }
 
 export class BlobStorageService {
-  private bucket: GridFSBucket
+  private bucket: GridFSBucket | null = null
 
-  constructor() {
-    this.bucket = getGridFSBucket()
+  private getBucket(): GridFSBucket {
+    if (!this.bucket) {
+      this.bucket = getGridFSBucket()
+    }
+    return this.bucket
   }
 
   async storeBlob(
@@ -40,7 +43,7 @@ export class BlobStorageService {
     try {
       logger.info(`Storing blob: ${filename} (${buffer.length} bytes)`)
 
-      const uploadStream = this.bucket.openUploadStream(filename, {
+      const uploadStream = this.getBucket().openUploadStream(filename, {
         contentType,
         metadata: {
           ...metadata,
@@ -85,7 +88,7 @@ export class BlobStorageService {
     try {
       logger.info(`Retrieving blob with ID: ${blobId}`)
 
-      const downloadStream = this.bucket.openDownloadStream(new ObjectId(blobId))
+      const downloadStream = this.getBucket().openDownloadStream(new ObjectId(blobId))
       const chunks: Buffer[] = []
 
       return new Promise((resolve, reject) => {
@@ -113,7 +116,7 @@ export class BlobStorageService {
   async deleteBlob(blobId: string): Promise<void> {
     try {
       logger.info(`Deleting blob with ID: ${blobId}`)
-      await this.bucket.delete(new ObjectId(blobId))
+      await this.getBucket().delete(new ObjectId(blobId))
       logger.info(`Blob deleted successfully`)
     } catch (error) {
       logger.error(`Error deleting blob: ${error}`)
@@ -123,7 +126,7 @@ export class BlobStorageService {
 
   async getBlobInfo(blobId: string): Promise<StoredBlob | null> {
     try {
-      const files = await this.bucket.find({ _id: new ObjectId(blobId) }).toArray()
+      const files = await this.getBucket().find({ _id: new ObjectId(blobId) }).toArray()
       if (files.length === 0) {
         return null
       }

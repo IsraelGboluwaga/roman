@@ -7,6 +7,8 @@ import dotenv from 'dotenv'
 import { routes } from './api/routes'
 import { mongo } from './config/mongo'
 import { logger, loggerStream } from './config/winston'
+import { setupSwagger } from './config/swagger'
+import { errorHandler } from './api/middleware/errorHandling.middleware'
 
 dotenv.config()
 
@@ -16,8 +18,6 @@ const PORT = process.env.PORT || 3000
 server.use(morgan('combined', { stream: loggerStream }))
 server.use(bodyParser.json())
 server.use(bodyParser.urlencoded({ extended: true }))
-
-mongo()
 
 server.use(
   (
@@ -39,23 +39,40 @@ server.use(
 )
 
 global.Promise = bluebird as any
-routes(server)
 
-server.use(
-  (
-    err: any,
-    req: express.Request,
-    res: express.Response,
-    next: express.NextFunction
-  ): void => {
-    err.status = 404
-    logger.error(
-      `${err.status} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`
-    )
-    next(err)
+// Initialize server with async MongoDB connection
+;(async () => {
+  try {
+    // Wait for MongoDB connection before setting up routes
+    await mongo()
+    
+    // Setup Swagger documentation
+    setupSwagger(server)
+    
+    // Setup routes
+    routes(server)
+    
+    // 404 handler for routes not found (plain text)
+    server.use((req: express.Request, res: express.Response, next: express.NextFunction): void => {
+      logger.warn(`Route not found: ${req.method} ${req.originalUrl}`, {
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
+      })
+      res.status(404).send('requested resource not found')
+    })
+    
+    // Global error handler for all other errors (JSON)
+    server.use(errorHandler)
+    
+    // Start server
+    server.listen(PORT, (): void => {
+      console.log(`🚀 Server running on port ${PORT}`)
+      console.log(`📚 API Documentation: http://localhost:${PORT}/docs`)
+      console.log(`📄 OpenAPI Spec: http://localhost:${PORT}/docs.json`)
+    })
+    
+  } catch (error) {
+    logger.error('Failed to start server:', error)
+    process.exit(1)
   }
-)
-
-server.listen(PORT, (): void => {
-  console.log(`Server running on port ${PORT}`)
-})
+})()
