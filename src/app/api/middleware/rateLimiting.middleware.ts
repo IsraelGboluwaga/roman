@@ -34,7 +34,9 @@ export const aiGenerationRateLimit = rateLimit({
     error: 'Rate limit exceeded'
   },
   keyGenerator: (req: any) => {
-    return req.user?.userId || req.ip
+    // Only rate limit by userId for authenticated users
+    // For unauthenticated users, use a shared key (they'll share the limit)
+    return req.user?.userId || 'unauthenticated'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -50,7 +52,7 @@ export const aiGenerationRateLimit = rateLimit({
 })
 
 export const strictAiGenerationRateLimit = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour  
+  windowMs: 60 * 60 * 1000, // 1 hour
   max: 5, // limit to 5 for authenticated secure endpoint
   message: {
     success: false,
@@ -58,7 +60,9 @@ export const strictAiGenerationRateLimit = rateLimit({
     error: 'Rate limit exceeded'
   },
   keyGenerator: (req: any) => {
-    return req.user?.userId || req.ip
+    // Only rate limit by userId for authenticated users
+    // For unauthenticated users, use a shared key (they'll share the limit)
+    return req.user?.userId || 'unauthenticated'
   },
   standardHeaders: true,
   legacyHeaders: false,
@@ -82,7 +86,9 @@ export const uploadRateLimit = rateLimit({
     error: 'Rate limit exceeded'
   },
   keyGenerator: (req: any) => {
-    return req.user?.userId || req.ip
+    // Only rate limit by userId for authenticated users
+    // For unauthenticated users, use a shared key (they'll share the limit)
+    return req.user?.userId || 'unauthenticated'
   },
   standardHeaders: true,
   legacyHeaders: false,

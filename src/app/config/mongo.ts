@@ -42,7 +42,6 @@ const connectionOptions = {
   serverSelectionTimeoutMS: config.mongodb.serverSelectionTimeout,
   connectTimeoutMS: config.mongodb.connectionTimeout,
   socketTimeoutMS: 45000,
-  bufferMaxEntries: 0,
   bufferCommands: false,
   maxIdleTimeMS: 30000,
   retryWrites: true,
